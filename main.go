@@ -59,10 +59,6 @@ func resizeGIF(im *gif.GIF, width, height int) error {
 func manageWorkerPool(jobs <-chan job, limit int, worker func(j job), wg *sync.WaitGroup) {
 	workerLimit := make(chan struct{}, limit)
 	for j := range jobs {
-		if len(workerLimit) > limit {
-			<-workerLimit
-		}
-
 		wg.Add(1)
 		workerLimit <- struct{}{}
 		go func(j job) {
@@ -84,13 +80,6 @@ func drawToFrame(dst *image.Paletted, resized image.Image) {
 	draw.Draw(newPaletted, bounds, resized, image.Point{}, draw.Src)
 
 	*dst = *newPaletted
-}
-
-func resizeFrame(accum *image.RGBA, frame *image.Paletted, width, height int) image.Image {
-	frameBounds := frame.Bounds()
-	draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
-
-	return resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
 }
 
 func main() {
