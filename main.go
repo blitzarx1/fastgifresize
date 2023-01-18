@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"image/draw"
@@ -15,16 +16,14 @@ import (
 	"github.com/nfnt/resize"
 )
 
-const poolsize = 500
-
 type job struct {
 	frame *image.Paletted
 	accum image.Image
 }
 
-func resizeGIF(im *gif.GIF, width, height int) error {
+func resizeGIF(im *gif.GIF, poolsize, width, height int) error {
 	t := time.Now()
-	defer func() { fmt.Println(fmt.Sprint("elapsed: ", time.Since(t))) }()
+	defer func() { fmt.Println(fmt.Sprint("time spent processing image: ", time.Since(t))) }()
 
 	jobs := make(chan job, poolsize)
 	firstFrame := im.Image[0]
@@ -85,12 +84,19 @@ func drawToFrame(dst *image.Paletted, resized image.Image) {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	dimension := os.Args[2]
-	splits := strings.Split(dimension, "x")
-	width, _ := strconv.Atoi(splits[0])
-	height, _ := strconv.Atoi(splits[1])
+	dim := flag.String("dims", "400x400", "Dimensions of the final image, p.e. 400x400")
+	dimSplit := strings.Split(*dim, "x")
+	width, _ := strconv.Atoi(dimSplit[0])
+	height, _ := strconv.Atoi(dimSplit[1])
 
-	src, err := os.Open(os.Args[1])
+	srcPath := flag.String("src", "./src.gif", "Source image path")
+	dstPath := flag.String("dst", "./out.gif", "Result path")
+
+	poolsize := flag.Int("poolsize", 5000, "Number of frames processed in parallel")
+
+	flag.Parse()
+
+	src, err := os.Open(*srcPath)
 	if err != nil {
 		panic(err)
 	}
@@ -101,13 +107,13 @@ func main() {
 		panic(err)
 	}
 
-	dst, err := os.Create(os.Args[3])
+	dst, err := os.Create(*dstPath)
 	if err != nil {
 		panic(err)
 	}
 	defer dst.Close()
 
-	err = resizeGIF(g, width, height)
+	err = resizeGIF(g, *poolsize, width, height)
 	if err != nil {
 		panic(err)
 	}
