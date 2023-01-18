@@ -2,6 +2,8 @@
 
 Universal parallel gif resize example in golang
 
+I created this repo because at the moment there are no libraries in golang which perform this task without C bindings.
+
 ## algo description
 Resizes gif frame by frame in parallel goroutines. 
 
