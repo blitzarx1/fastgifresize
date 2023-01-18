@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/draw"
 	"image/gif"
@@ -9,22 +10,44 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nfnt/resize"
 )
 
+const poolsize = 500
+
+type job struct {
+	frame *image.Paletted
+	accum image.Image
+}
+
 func resizeGIF(im *gif.GIF, width, height int) error {
-	img := image.NewRGBA(im.Image[0].Bounds())
-	wg := sync.WaitGroup{}
+	t := time.Now()
+	defer func() { fmt.Println(fmt.Sprint("elapsed: ", time.Since(t))) }()
+
+	jobs := make(chan job, poolsize)
+	firstFrame := im.Image[0]
+	firstFrameBounds := firstFrame.Bounds()
+	accum := image.NewRGBA(firstFrameBounds)
+
+	var wg sync.WaitGroup
+	go manageWorkerPool(jobs, poolsize, worker, &wg)
 
 	for _, frame := range im.Image {
-		resized := resizeFrame(img, frame, width, height)
-		wg.Add(1)
-		go func(frame *image.Paletted, resized image.Image) {
-			defer wg.Done()
-			drawToFrame(frame, resized)
-		}(frame, resized)
+		frameBounds := frame.Bounds()
+
+		// this Draw call can not be in async part as we need to draw frames into
+		// accumulating image in the original order and perform resizing
+		// of accumulation result; this Draw call is much cheaper than call in async func
+		// that is why we can parallelize the whole process
+		draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
+		resized := resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
+
+		jobs <- job{frame, resized}
 	}
+
+	close(jobs)
 	wg.Wait()
 
 	im.Config.Width = im.Image[0].Bounds().Dx()
@@ -33,11 +56,26 @@ func resizeGIF(im *gif.GIF, width, height int) error {
 	return nil
 }
 
-func resizeFrame(accum *image.RGBA, frame *image.Paletted, width, height int) image.Image {
-	frameBounds := frame.Bounds()
-	draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
+func manageWorkerPool(jobs <-chan job, limit int, worker func(j job), wg *sync.WaitGroup) {
+	workerLimit := make(chan struct{}, limit)
+	for j := range jobs {
+		if len(workerLimit) > limit {
+			<-workerLimit
+		}
 
-	return resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
+		wg.Add(1)
+		workerLimit <- struct{}{}
+		go func(j job) {
+			worker(j)
+			<-workerLimit
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
+}
+
+func worker(j job) {
+	drawToFrame(j.frame, j.accum)
 }
 
 func drawToFrame(dst *image.Paletted, resized image.Image) {
@@ -46,6 +84,13 @@ func drawToFrame(dst *image.Paletted, resized image.Image) {
 	draw.Draw(newPaletted, bounds, resized, image.Point{}, draw.Src)
 
 	*dst = *newPaletted
+}
+
+func resizeFrame(accum *image.RGBA, frame *image.Paletted, width, height int) image.Image {
+	frameBounds := frame.Bounds()
+	draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
+
+	return resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
 }
 
 func main() {
