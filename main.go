@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image"
 	"image/draw"
 	"image/gif"
@@ -9,43 +8,24 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/nfnt/resize"
 )
 
 func resizeGIF(im *gif.GIF, width, height int) error {
-	start := time.Now()
-	defer func() { fmt.Println(fmt.Sprint("elapsed total: ", time.Since(start))) }()
-
 	img := image.NewRGBA(im.Image[0].Bounds())
-	// var img *image.RGBA
-	for i, frame := range im.Image {
-		fmt.Println(im.Disposal[i])
-		frameBounds := frame.Bounds()
+	wg := sync.WaitGroup{}
 
-		draw.Draw(img, frameBounds, frame, frameBounds.Min, draw.Over)
-
-		var resized image.Image = img
-		if width != 0 {
-			resized = resize.Resize(uint(width), 0, img, resize.Lanczos3)
-		}
-
-		if height != 0 {
-			resized = resize.Resize(0, uint(height), img, resize.Lanczos3)
-		}
-
-		bounds := resized.Bounds()
-		// if img == nil {
-		// 	img = image.NewRGBA(bounds)
-		// }
-		// draw.Draw(img, bounds, resized, bounds.Min, draw.Over)
-
-		newPaletted := image.NewPaletted(bounds, frame.Palette)
-		draw.Draw(newPaletted, bounds, resized, image.Point{}, draw.Src)
-
-		*frame = *newPaletted
+	for _, frame := range im.Image {
+		resized := resizeFrame(img, frame, width, height)
+		wg.Add(1)
+		go func(frame *image.Paletted, resized image.Image) {
+			defer wg.Done()
+			drawToFrame(frame, resized)
+		}(frame, resized)
 	}
+	wg.Wait()
 
 	im.Config.Width = im.Image[0].Bounds().Dx()
 	im.Config.Height = im.Image[0].Bounds().Dy()
@@ -53,29 +33,14 @@ func resizeGIF(im *gif.GIF, width, height int) error {
 	return nil
 }
 
-func resizeGIFFrameFixAspect(accum *image.RGBA, frame *image.Paletted, width, height int) image.Image {
-	// start := time.Now()
-	// defer func() { fmt.Println(fmt.Sprint("elapsed for frame resize: ", time.Since(start))) }()
-
+func resizeFrame(accum *image.RGBA, frame *image.Paletted, width, height int) image.Image {
 	frameBounds := frame.Bounds()
 	draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
 
-	var resized image.Image = accum
-	if width != 0 {
-		resized = resize.Resize(uint(width), 0, accum, resize.Lanczos3)
-	}
-
-	if height != 0 {
-		resized = resize.Resize(0, uint(height), accum, resize.Lanczos3)
-	}
-
-	return resized
+	return resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
 }
 
 func drawToFrame(dst *image.Paletted, resized image.Image) {
-	// start := time.Now()
-	// defer func() { fmt.Println(fmt.Sprint("elapsed for drawing to frame: ", time.Since(start))) }()
-
 	bounds := resized.Bounds()
 	newPaletted := image.NewPaletted(bounds, dst.Palette)
 	draw.Draw(newPaletted, bounds, resized, image.Point{}, draw.Src)
