@@ -17,8 +17,9 @@ import (
 )
 
 type job struct {
-	frame *image.Paletted
-	accum image.Image
+	frame         *image.Paletted
+	accum         image.Image
+	width, height int
 }
 
 func resizeGIF(im *gif.GIF, poolsize, width, height int) error {
@@ -41,9 +42,16 @@ func resizeGIF(im *gif.GIF, poolsize, width, height int) error {
 		// of accumulation result; this Draw call is much cheaper than call in async func
 		// that is why we can parallelize the whole process
 		draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
-		resized := resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
 
-		jobs <- job{frame, resized}
+		// copy image to parallel resize task as well
+		newPix := make([]uint8, len(accum.Pix))
+		copy(newPix, accum.Pix)
+
+		jobs <- job{frame, &image.RGBA{
+			Pix:    newPix,
+			Stride: accum.Stride,
+			Rect:   accum.Rect,
+		}, width, height}
 	}
 
 	close(jobs)
@@ -70,10 +78,11 @@ func manageWorkerPool(jobs <-chan job, limit int, worker func(j job), wg *sync.W
 }
 
 func worker(j job) {
-	drawToFrame(j.frame, j.accum)
+	drawToFrame(j.frame, j.accum, j.width, j.height)
 }
 
-func drawToFrame(dst *image.Paletted, resized image.Image) {
+func drawToFrame(dst *image.Paletted, accum image.Image, width, height int) {
+	resized := resize.Resize(uint(width), uint(height), accum, resize.Bilinear)
 	bounds := resized.Bounds()
 	newPaletted := image.NewPaletted(bounds, dst.Palette)
 	draw.Draw(newPaletted, bounds, resized, image.Point{}, draw.Src)
