@@ -17,9 +17,8 @@ import (
 )
 
 type job struct {
-	frame         *image.Paletted
-	accum         image.Image
-	width, height int
+	frame *image.Paletted
+	accum image.Image
 }
 
 func resizeGIF(im *gif.GIF, poolsize, width, height int) error {
@@ -69,7 +68,7 @@ func manageWorkerPool(jobs <-chan job, limit int, worker func(j job), wg *sync.W
 }
 
 func worker(j job) {
-	drawToFrame(j.frame, j.accum, j.width, j.height)
+	drawToFrame(j.frame, j.accum)
 }
 
 func drawToFrame(dst *image.Paletted, src image.Image) {
