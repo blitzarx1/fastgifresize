@@ -1,3 +1,5 @@
+github.com/andybons/gogif v0.0.0-20140526152223-16d573594812 h1:WBBv0ka2SO7Ut4bpskb87E9cHNnJabqA6VoBTex0Jng=
+github.com/andybons/gogif v0.0.0-20140526152223-16d573594812/go.mod h1:lkVwYUDYv/mJZK69J7BP7HRUhHEAone7OQHFBRnhQdQ=
 github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b h1:5Ci5wpOL75rYF6RQGRoqhEAU6xLJ6n/D4SckXX1yB74=
 github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b/go.mod h1:obBQGGIFbbv9KWg92Qu9UHeD94JXmHD1jovY/z6I3O8=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=

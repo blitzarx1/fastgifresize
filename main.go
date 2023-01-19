@@ -34,16 +34,14 @@ func resizeGIF(im *gif.GIF, poolsize, width, height int) error {
 	go manageWorkerPool(jobs, poolsize, worker, &wg)
 
 	for _, frame := range im.Image {
-		frameBounds := frame.Bounds()
-
-		// this Draw call can not be in async part as we need to draw frames into
+		// the following Draw call can not be in async part as we need to draw frames into
 		// accumulating image in the original order and perform resizing
 		// of accumulation result; this Draw call is much cheaper than call in async func
 		// that is why we can parallelize the whole process
+		frameBounds := frame.Bounds()
 		draw.Draw(accum, frameBounds, frame, frameBounds.Min, draw.Over)
-		resized := resize.Resize(uint(width), uint(height), accum, resize.Lanczos3)
 
-		jobs <- job{frame, resized}
+		jobs <- job{frame, resize.Resize(uint(width), uint(height), accum, resize.Bilinear)}
 	}
 
 	close(jobs)
@@ -73,10 +71,10 @@ func worker(j job) {
 	drawToFrame(j.frame, j.accum)
 }
 
-func drawToFrame(dst *image.Paletted, resized image.Image) {
-	bounds := resized.Bounds()
+func drawToFrame(dst *image.Paletted, src image.Image) {
+	bounds := src.Bounds()
 	newPaletted := image.NewPaletted(bounds, dst.Palette)
-	draw.Draw(newPaletted, bounds, resized, image.Point{}, draw.Src)
+	draw.Draw(newPaletted, bounds, src, image.Point{}, draw.Src)
 
 	*dst = *newPaletted
 }
@@ -85,16 +83,15 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	dim := flag.String("dims", "400x400", "Dimensions of the final image, p.e. 400x400")
-	dimSplit := strings.Split(*dim, "x")
-	width, _ := strconv.Atoi(dimSplit[0])
-	height, _ := strconv.Atoi(dimSplit[1])
-
 	srcPath := flag.String("src", "./src.gif", "Source image path")
 	dstPath := flag.String("dst", "./out.gif", "Result path")
-
 	poolsize := flag.Int("poolsize", 5000, "Number of frames processed in parallel")
 
 	flag.Parse()
+
+	dimSplit := strings.Split(*dim, "x")
+	width, _ := strconv.Atoi(dimSplit[0])
+	height, _ := strconv.Atoi(dimSplit[1])
 
 	src, err := os.Open(*srcPath)
 	if err != nil {
