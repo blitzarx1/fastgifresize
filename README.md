@@ -5,7 +5,7 @@ Universal parallel gif resize example in golang
 I created this repo because at the moment there are no libraries in golang which perform this task without C bindings.
 
 ## algo description
-Resizes gif frame by frame in parallel goroutines. 
+This is a high level algo, which uses [nfnt/resize](https://github.com/nfnt/resize) package resizing gif frame by frame in goroutines. 
 
 Synchroneous part is drawing frame onto accumulation image in its default size and position and after that creates async task for resize of the accumualtion image.
 
